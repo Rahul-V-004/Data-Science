@@ -1,0 +1,244 @@
+SKEWNESS TRANSFORMATIONS IN MACHINE LEARNING
+A Practical Guide with Real-World Examples
+=============================================
+
+
+WHEN TO USE WHICH TRANSFORMATION
+----------------------------------
+Right skew (positive tail) --> Log, Square Root, Box-Cox, Reciprocal
+Left skew (negative tail)  --> Exponential, Reflect + Log
+Outliers only              --> Winsorise, IQR Clipping
+Unknown skew               --> Box-Cox (auto-finds best lambda)
+
+
+=============================================
+1. LOG TRANSFORMATION  |  log(x)
+=============================================
+Skew type   : Right skew (positive)
+Requirement : Positive values only (no zeros)
+
+What it does:
+  Compresses large values and stretches small ones.
+  Best when data spans multiple orders of magnitude.
+
+Real-world examples:
+  - House prices / salaries: A city has mostly Rs.30-60 lakh homes
+    but a few crore-level mansions. Log pulls that long tail in and
+    makes the distribution bell-shaped.
+  - E-commerce order value: Most orders are Rs.200-500, but a few
+    bulk B2B orders are Rs.5-10 lakh.
+
+When to use:
+  Data spans several orders of magnitude. Income, prices, population,
+  website traffic, revenue are classic candidates.
+
+Note: If data has zeros, use log(x + 1) instead.
+
+
+=============================================
+2. SQUARE ROOT  |  sqrt(x)
+=============================================
+Skew type   : Mild right skew
+Requirement : Non-negative values
+
+What it does:
+  Weaker than log. Use when skew is moderate and you don't want
+  to over-compress the data.
+
+Real-world examples:
+  - Hospital visits per patient per year: Most people visit 0-3 times,
+    a few chronic patients visit 20+ times. Sqrt softens that tail
+    without distorting the lower end.
+  - Bug counts in software modules: Count data is naturally
+    right-skewed. Sqrt is the classic fix for Poisson-like distributions.
+
+When to use:
+  Count data (number of events, visits, purchases). Moderate skew
+  where log feels too aggressive.
+
+
+=============================================
+3. BOX-COX  |  (x^lambda - 1) / lambda
+=============================================
+Skew type   : Any direction
+Requirement : Strictly positive values
+
+What it does:
+  Finds the best-fit power (lambda) automatically.
+  - lambda = 0   --> becomes log transformation
+  - lambda = 0.5 --> becomes square root
+  - lambda = -1  --> becomes reciprocal
+  Most flexible option.
+
+Real-world examples:
+  - Manufacturing defect rates: You're not sure if the distribution
+    is log-normal or something else. Let Box-Cox find the right
+    lambda. Used heavily in Six Sigma / quality control.
+
+When to use:
+  When you're unsure which transformation fits. Let the math decide.
+  sklearn's PowerTransformer does this in one line.
+
+Note: Requires strictly positive values. Use Yeo-Johnson if you
+      have zeros or negatives.
+
+
+=============================================
+4. RECIPROCAL  |  1/x
+=============================================
+Skew type   : Extreme right skew
+Requirement : No zeros (division by zero)
+
+What it does:
+  Strongest compression. Good for ratio data or when large values
+  are physically extreme.
+
+Real-world examples:
+  - Response times / latency: Most API calls respond in 100-500 ms,
+    but timeouts can be 30,000 ms. Reciprocal (or 1/latency =
+    throughput) makes the distribution workable.
+  - Fuel efficiency: The reciprocal of km-per-litre (i.e., litres
+    per km) is often more normally distributed.
+
+When to use:
+  Ratio or rate data with extreme outliers on the high end.
+  Think: speed, latency, efficiency metrics.
+
+
+=============================================
+5. WINSORISE  |  clip to [p5, p95]
+=============================================
+Skew type   : Outliers only (not for shape change)
+Requirement : None
+
+What it does:
+  Caps values at chosen percentiles (e.g., 5th and 95th).
+  Does NOT change the shape -- just neutralises extreme outliers.
+  Data stays on the original scale.
+
+Real-world examples:
+  - Credit card spend modelling: A fraudulent transaction of Rs.10 lakh
+    distorts your model. Winsorise at 99th percentile -- the value
+    becomes the cap, not dropped.
+  - Financial returns: Daily stock returns have fat tails.
+    Winsorsing at +/-5% keeps the model stable without losing rows.
+
+When to use:
+  The outlier is a REAL value (not a data error) but is distorting
+  your model. You want to keep the row but limit its influence.
+
+Difference from IQR: Winsorise caps the value. IQR removes the row.
+
+
+=============================================
+6. IQR CLIPPING  |  remove values > Q3 + 1.5*IQR
+=============================================
+Skew type   : Outlier removal (data errors)
+Requirement : None
+
+What it does:
+  Identifies outliers using the interquartile range and removes
+  or flags them. Rows are dropped entirely.
+
+Real-world examples:
+  - IoT / weather sensor readings: A faulty temperature sensor records
+    -999 degrees C. That's a data error, not a real value. IQR removes
+    it rather than capping it.
+  - Lab test results: Physically impossible values (e.g., negative
+    haemoglobin) are instrument errors -- remove them.
+
+When to use:
+  The outlier is a DATA ERROR (sensor glitch, typo, system fault).
+  It should not exist in the dataset at all.
+
+Difference from Winsorise: IQR drops the row. Winsorise caps it.
+
+
+=============================================
+7. EXPONENTIAL  |  e^x or x^n
+=============================================
+Skew type   : Left skew (negative tail)
+Requirement : None
+
+What it does:
+  For left-skewed data where most values cluster near the maximum.
+  Exponential pulls the left tail out to create symmetry.
+
+Real-world examples:
+  - Exam scores (easy test): If most students score 85-100 with
+    a long left tail, exponential (or squaring) stretches it.
+  - Athlete performance at elite level: 100m sprint times at the
+    Olympics cluster near peak performance -- left-skewed.
+
+When to use:
+  Left-skewed data (uncommon in practice). More often, practitioners
+  reflect the variable first (max - x) and then apply log.
+
+Note: Rarely used directly. Left skew is much less common than
+      right skew in real-world data.
+
+
+=============================================
+HOW TO DECIDE -- STEP BY STEP
+=============================================
+
+Step 1: Plot a histogram
+  Is the tail on the right (positive skew) or left (negative skew)?
+  Compute skewness score: >1 is significant right skew, <-1 is left.
+
+Step 2: Check for zeros or negatives
+  - Log and reciprocal break on zero --> use log(x+1) or shift data
+  - Box-Cox breaks on negatives --> use Yeo-Johnson instead
+
+Step 3: Is it a data error or a real value?
+  - Real extreme value (genuine Rs.5 lakh order) --> Winsorise or transform
+  - Bad sensor / typo / impossible value       --> IQR and remove it
+
+Step 4: How severe is the skew?
+  - Mild skew   --> Square root
+  - Moderate    --> Log
+  - Severe      --> Reciprocal
+  - Unsure      --> Box-Cox (let the math decide)
+
+Step 5: Does interpretability matter?
+  - Winsorise and sqrt keep the original scale readable
+  - Log changes the unit (log-rupees, log-hours) -- remember to
+    exponentiate predictions back to original scale
+
+Step 6: Verify
+  After transforming, plot the histogram again.
+  Target: skewness close to 0, kurtosis reasonable.
+
+
+=============================================
+QUICK REFERENCE TABLE
+=============================================
+
+Transformation | Skew Type      | Real Example               | Caveat
+---------------|----------------|----------------------------|-------------------
+Log            | Right (severe) | Salaries, house prices     | No zeros
+Square root    | Right (mild)   | Bug counts, visit counts   | No negatives
+Box-Cox        | Any            | Defect rates               | Positive only
+Reciprocal     | Right (extreme)| Latency, fuel efficiency   | No zeros
+Winsorise      | Outliers       | Credit card spend          | Caps, doesn't drop
+IQR            | Data errors    | Sensor faults, lab errors  | Drops rows
+Exponential    | Left           | Exam scores, elite sports  | Rarely needed
+
+
+=============================================
+CORE MENTAL MODEL
+=============================================
+
+Ask yourself: WHY is the data skewed?
+
+  Because of SCALE (salaries from Rs.3L to Rs.3Cr)
+    --> Log is almost always your first try
+
+  Because of REAL EXTREME EVENTS (flash sale, viral post)
+    --> Winsorise (cap but keep the row)
+
+  Because of BAD DATA (sensor glitch, typo)
+    --> IQR clipping (remove the row)
+
+  Because you're UNSURE
+    --> Box-Cox (auto-optimises the power)
