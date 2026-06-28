@@ -13,3 +13,4 @@ def even_odd(num):
     else:
         print(f'{num} is Odd Number')
 
+even_odd(3)
